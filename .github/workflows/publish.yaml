@@ -1,0 +1,65 @@
+name: publish
+
+# Rebuilds the APT repository on GitHub Pages from the releases of every
+# project listed in `sources`: the latest release goes to suite "stable", the
+# "dev" pre-release to suite "dev". Projects run this after each release
+# (gh workflow run publish.yaml -R lpaolini/apt). The whole repository is
+# rebuilt each time, because every Pages deployment replaces the whole site.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Install repository tooling
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends apt-utils dpkg-dev gnupg
+      - name: Download released packages
+        run: |
+          grep -v '^\s*\(#\|$\)' sources | while read -r repo; do
+            # Without a tag, gh picks the latest release, never the dev pre-release.
+            gh release download -R "$repo" --pattern '*.deb' --dir channels/stable ||
+              echo "::warning::$repo has no stable release"
+            gh release download dev -R "$repo" --pattern '*.deb' --dir channels/dev ||
+              echo "$repo has no dev release"
+          done
+          suites=()
+          for s in stable dev; do
+            if compgen -G "channels/$s/*.deb" >/dev/null; then suites+=("$s=channels/$s"); fi
+          done
+          if [ ${#suites[@]} -eq 0 ]; then echo "No packages to publish" >&2; exit 1; fi
+          echo "SUITES=${suites[*]}" >> "$GITHUB_ENV"
+      - name: Build APT repository
+        env:
+          APT_SIGNING_KEY: ${{ secrets.APT_SIGNING_KEY }}
+          APT_SIGNING_PASSPHRASE: ${{ secrets.APT_SIGNING_PASSPHRASE }}
+          REQUIRE_APT_SIGNING: '1'
+        run: |
+          # shellcheck disable=SC2086  # SUITES is a list of SUITE=DIR words
+          ./build-repository.sh public \
+            "https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}" $SUITES
+      - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5.0.0
+      - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3.0.1
+        with:
+          path: public
+      - id: deployment
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4.0.5
