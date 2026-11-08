@@ -1,3 +1,4 @@
 # GitHub repositories whose release packages this APT repository publishes.
 # Latest release -> suite "stable"; the "dev" pre-release -> suite "dev".
 lpaolini/docker-firewall
+lpaolini/ugreen-dxp-pve

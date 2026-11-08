@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # Build a signed APT repository with one suite per release channel.
 # Each suite holds every .deb in its directory, from any number of projects.
+# The "stable" suite also provides downloads/<package>_latest.deb
+# (<package>_latest_<arch>.deb unless Architecture: all); other suites get
+# the same under downloads/<suite>/.
 #
 # Usage: build-repository.sh OUT_DIR BASE_URL SUITE=DEB_DIR [SUITE=DEB_DIR ...]
 #   e.g. build-repository.sh public https://example.org stable=dist/stable dev=dist/dev
@@ -49,13 +52,21 @@ fi
 add_suite() {
   local suite="$1" deb_dir="$2"
   local pool="pool/${suite}/${COMPONENT}"
+  local downloads="downloads"
+  [[ "${suite}" = stable ]] || downloads="downloads/${suite}"
 
   if ! compgen -G "${deb_dir}/*.deb" >/dev/null; then
     echo "No .deb files for suite ${suite} in ${deb_dir}" >&2
     exit 1
   fi
-  mkdir -p "${REPO_ROOT}/${pool}"
-  cp "${deb_dir}"/*.deb "${REPO_ROOT}/${pool}/"
+  mkdir -p "${REPO_ROOT}/${pool}" "${REPO_ROOT}/${downloads}"
+  for deb in "${deb_dir}"/*.deb; do
+    cp "${deb}" "${REPO_ROOT}/${pool}/"
+    local name arch
+    name="$(dpkg-deb -f "${deb}" Package)" arch="$(dpkg-deb -f "${deb}" Architecture)"
+    [[ "${arch}" = all ]] && name+="_latest.deb" || name+="_latest_${arch}.deb"
+    cp "${deb}" "${REPO_ROOT}/${downloads}/${name}"
+  done
 
   local dist="${REPO_ROOT}/dists/${suite}"
   for arch in ${ARCHITECTURES}; do
