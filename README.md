@@ -6,7 +6,7 @@ projects listed in [sources](sources).
 ```sh
 sudo install -d -m 0755 /etc/apt/keyrings
 curl -fsSL https://lpaolini.github.io/apt/public.key | sudo gpg --dearmor -o /etc/apt/keyrings/lpaolini.gpg
-echo "deb [signed-by=/etc/apt/keyrings/lpaolini.gpg] https://lpaolini.github.io/apt stable main" | sudo tee /etc/apt/sources.list.d/lpaolini.list
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/lpaolini.gpg] https://lpaolini.github.io/apt stable main" | sudo tee /etc/apt/sources.list.d/lpaolini.list
 sudo apt update
 ```
 
